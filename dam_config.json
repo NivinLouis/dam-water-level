@@ -1,0 +1,47 @@
+{
+  "dam": {
+    "device_height": 5,
+    "min_water_level": 1,
+    "max_water_level": 4,
+    "warning_threshold_percent": 80,
+    "critical_threshold_percent": 90,
+    "low_water_threshold_percent": 20,
+    "dam_name": "Dam Water Level Monitor",
+    "location": "",
+    "unit": "m"
+  },
+  "hydraulics": {
+    "reservoir_area": 1000,
+    "spillway_crest_level": 0.7,
+    "spillway_length": 10,
+    "spillway_coefficient": 1.84,
+    "num_spillway_gates": 3,
+    "gate_width": 3,
+    "gate_opening": 3,
+    "gate_coefficient": 0.6,
+    "outlet_area": 2,
+    "outlet_coefficient": 0.62,
+    "outlet_level": 0.2,
+    "manual_inflow": 0,
+    "manual_outflow": 0,
+    "use_calculated_discharge": true,
+    "use_calculated_spillway": true,
+    "gravity": 9.81
+  },
+  "ocr": {
+    "roi": {
+      "x_start_pct": 0.28,
+      "x_end_pct": 0.78,
+      "y_start_pct": 0.78,
+      "y_end_pct": 0.98
+    },
+    "decimal_position": 1,
+    "expected_digits_after_decimal": 3,
+    "adaptive_threshold_block_size": 25,
+    "adaptive_threshold_c": 10
+  },
+  "esp_cam": {
+    "url": "http://10.188.122.133:81/stream",
+    "auto_connect": true
+  }
+}

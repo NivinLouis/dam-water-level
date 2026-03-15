@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dam Water Level Monitoring – ESP-CAM OCR System</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.6.1/socket.io.min.js"></script>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="navbar-content">
+            <h1 id="damNameHeader">Dam Water Level Monitoring – ESP-CAM OCR</h1>
+            <p class="subtitle">Real-time water level reading from laser meter (Range: 0.000m - 250.000m)</p>
+        </div>
+        <button class="settings-btn" id="settingsBtn" title="Settings">⚙️ Settings</button>
+    </nav>
+
+    <!-- Settings Modal -->
+    <div class="modal-overlay" id="settingsModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>System Configuration</h2>
+                <button class="modal-close" id="closeSettingsBtn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="settings-tabs">
+                    <button class="tab-btn active" data-tab="dam-settings">Dam Settings</button>
+                    <button class="tab-btn" data-tab="hydraulics-settings">Hydraulics</button>
+                    <button class="tab-btn" data-tab="ocr-settings">OCR Settings</button>
+                    <button class="tab-btn" data-tab="camera-settings">Camera Settings</button>
+                </div>
+
+                <!-- Dam Settings Tab -->
+                <div class="tab-content active" id="dam-settings">
+                    <h3>Dam Configuration</h3>
+                    <div class="settings-grid">
+                        <div class="form-group">
+                            <label for="cfgDamName">Dam Name</label>
+                            <input type="text" id="cfgDamName" placeholder="My Dam">
+                        </div>
+                        <div class="form-group">
+                            <label for="cfgLocation">Location</label>
+                            <input type="text" id="cfgLocation" placeholder="Location description">
+                        </div>
+                        <div class="form-group">
+                            <label for="cfgMinWaterLevel">Min Water Level (m)</label>
+                            <input type="number" id="cfgMinWaterLevel" step="0.1" min="0" placeholder="0.0">
+                            <small>Dam bottom reference</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="cfgDeviceHeight">Device Height (m)</label>
+                            <input type="number" id="cfgDeviceHeight" step="0.1" min="0" placeholder="120.0">
+                            <small>Height where laser meter is mounted</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="cfgMaxWaterLevel">Max Water Level (m)</label>
+                            <input type="number" id="cfgMaxWaterLevel" step="0.1" min="0" placeholder="120.0">
+                            <small>Full capacity level</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="cfgUnit">Unit</label>
+                            <select id="cfgUnit">
+                                <option value="m">Meters (m)</option>
+                                <option value="ft">Feet (ft)</option>
+                                <option value="cm">Centimeters (cm)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <h4>Alert Thresholds</h4>
+                    <div class="settings-grid">
+                        <div class="form-group">
+                            <label for="cfgCriticalThreshold">Critical Threshold (%)</label>
+                            <input type="number" id="cfgCriticalThreshold" step="1" min="0" max="100" placeholder="90">
+                            <small>Water level for critical alert</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="cfgWarningThreshold">Warning Threshold (%)</label>
+                            <input type="number" id="cfgWarningThreshold" step="1" min="0" max="100" placeholder="80">
+                            <small>Water level for warning</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="cfgLowThreshold">Low Water Threshold (%)</label>
+                            <input type="number" id="cfgLowThreshold" step="1" min="0" max="100" placeholder="20">
+                            <small>Low water warning level</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Hydraulics Settings Tab -->
+                <div class="tab-content" id="hydraulics-settings">
+                    <h3>Hydraulics Configuration</h3>
+                    
+                    <h4>Reservoir</h4>
+                    <div class="settings-grid">
+                        <div class="form-group">
+                            <label for="cfgReservoirArea">Reservoir Surface Area (m²)</label>
+                            <input type="number" id="cfgReservoirArea" step="1" min="0" placeholder="1000">
+                            <small>Used for inflow calculation</small>
+                        </div>
+                    </div>
+                    
+                    <h4>Spillway / Shutter</h4>
+                    <div class="settings-grid">
+                        <div class="form-group">
+                            <label for="cfgSpillwayCrest">Spillway Crest Level (m)</label>
+                            <input type="number" id="cfgSpillwayCrest" step="0.1" min="0" placeholder="8.0">
+                            <small>Elevation of spillway crest</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="cfgSpillwayLength">Spillway Length (m)</label>
+                            <input type="number" id="cfgSpillwayLength" step="0.1" min="0" placeholder="10.0">
+                        </div>
+                        <div class="form-group">
+                            <label for="cfgSpillwayCoeff">Spillway Coefficient</label>
+                            <input type="number" id="cfgSpillwayCoeff" step="0.01" min="0" placeholder="1.84">
+                            <small>Discharge coefficient (1.6-2.2 typical)</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="cfgNumGates">Number of Gates</label>
+                            <input type="number" id="cfgNumGates" step="1" min="0" placeholder="3">
+                        </div>
+                        <div class="form-group">
+                            <label for="cfgGateWidth">Gate Width (m)</label>
+                            <input type="number" id="cfgGateWidth" step="0.1" min="0" placeholder="3.0">
+                        </div>
+                        <div class="form-group">
+                            <label for="cfgGateCoeff">Gate Coefficient</label>
+                            <input type="number" id="cfgGateCoeff" step="0.01" min="0" placeholder="0.6">
+                        </div>
+                        <div class="form-group">
+                            <label for="cfgGateOpening">Current Gate Opening (m)</label>
+                            <input type="number" id="cfgGateOpening" step="0.1" min="0" placeholder="0.0">
+                            <small>0 = fully closed</small>
+                        </div>
+                    </div>
+                    
+                    <h4>Outlet / Sluice</h4>
+                    <div class="settings-grid">
+                        <div class="form-group">
+                            <label for="cfgOutletArea">Outlet Area (m²)</label>
+                            <input type="number" id="cfgOutletArea" step="0.1" min="0" placeholder="2.0">
+                        </div>
+                        <div class="form-group">
+                            <label for="cfgOutletCoeff">Outlet Coefficient</label>
+                            <input type="number" id="cfgOutletCoeff" step="0.01" min="0" placeholder="0.62">
+                        </div>
+                        <div class="form-group">
+                            <label for="cfgOutletLevel">Outlet Level (m)</label>
+                            <input type="number" id="cfgOutletLevel" step="0.1" min="0" placeholder="2.0">
+                            <small>Elevation of outlet center</small>
+                        </div>
+                    </div>
+                    
+                    <h4>Manual Values (optional)</h4>
+                    <div class="settings-grid">
+                        <div class="form-group">
+                            <label for="cfgManualInflow">Manual Inflow (m³/s)</label>
+                            <input type="number" id="cfgManualInflow" step="0.1" min="0" placeholder="0.0">
+                        </div>
+                        <div class="form-group">
+                            <label for="cfgManualOutflow">Manual Outflow (m³/s)</label>
+                            <input type="number" id="cfgManualOutflow" step="0.1" min="0" placeholder="0.0">
+                        </div>
+                    </div>
+                    
+                    <h4>Calculation Settings</h4>
+                    <div class="settings-grid">
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" id="cfgUseCalcDischarge" checked>
+                                Use calculated discharge
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" id="cfgUseCalcSpillway" checked>
+                                Use calculated spillway discharge
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- OCR Settings Tab -->
+                <div class="tab-content" id="ocr-settings">
+                    <h3>OCR Configuration</h3>
+                    <div class="settings-grid">
+                        <div class="form-group">
+                            <label for="cfgRoiXStart">ROI X Start (%)</label>
+                            <input type="number" id="cfgRoiXStart" step="0.01" min="0" max="1" placeholder="0.28">
+                        </div>
+                        <div class="form-group">
+                            <label for="cfgRoiXEnd">ROI X End (%)</label>
+                            <input type="number" id="cfgRoiXEnd" step="0.01" min="0" max="1" placeholder="0.78">
+                        </div>
+                        <div class="form-group">
+                            <label for="cfgRoiYStart">ROI Y Start (%)</label>
+                            <input type="number" id="cfgRoiYStart" step="0.01" min="0" max="1" placeholder="0.78">
+                        </div>
+                        <div class="form-group">
+                            <label for="cfgRoiYEnd">ROI Y End (%)</label>
+                            <input type="number" id="cfgRoiYEnd" step="0.01" min="0" max="1" placeholder="0.98">
+                        </div>
+                        <div class="form-group">
+                            <label for="cfgDecimalPosition">Decimal Position</label>
+                            <input type="number" id="cfgDecimalPosition" step="1" min="-1" max="5" placeholder="1">
+                            <small>Position from left (0-indexed), -1 for auto</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="cfgDigitsAfterDecimal">Digits After Decimal</label>
+                            <input type="number" id="cfgDigitsAfterDecimal" step="1" min="0" max="5" placeholder="3">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <button class="btn btn-secondary" id="resetOcrBoundsBtn">Reset OCR Boundaries</button>
+                    </div>
+                </div>
+
+                <!-- Camera Settings Tab -->
+                <div class="tab-content" id="camera-settings">
+                    <h3>ESP-CAM Configuration</h3>
+                    <div class="settings-grid">
+                        <div class="form-group full-width">
+                            <label for="cfgEspCamUrl">ESP-CAM Stream URL</label>
+                            <input type="text" id="cfgEspCamUrl" placeholder="http://192.168.1.100:81/stream">
+                        </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" id="cfgAutoConnect">
+                                Auto-connect on startup
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="resetDefaultsBtn">Reset to Defaults</button>
+                <button class="btn btn-primary" id="saveSettingsBtn">Save Settings</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Live Feed Section - Full Width -->
+        <section class="live-feed-section">
+            <h2>Live Camera Feed & OCR</h2>
+            <div class="live-feed-grid">
+                <!-- Live Video Feed -->
+                <div class="feed-panel">
+                    <h3>ESP-CAM Live Stream</h3>
+                    <div class="video-container">
+                        <img id="liveVideoFeed" class="live-video" 
+                             src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='640' height='480' viewBox='0 0 640 480'%3E%3Crect fill='%23222' width='640' height='480'/%3E%3Ctext x='320' y='240' text-anchor='middle' fill='%23666' font-family='sans-serif' font-size='20'%3ENo Camera Feed%3C/text%3E%3C/svg%3E"
+                             alt="Live Video Feed">
+                        <div class="feed-overlay" id="feedOverlay">
+                            <span class="connection-badge disconnected" id="feedStatus">Disconnected</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- OCR Result Panel & Camera Controls -->
+                <div class="ocr-panel">
+                    <h3>Camera Controls</h3>
+                    
+                    <!-- Live OCR Card moved here from video overlay -->
+                    <div class="live-ocr-card" id="liveOcrCard">
+                        <div class="live-ocr-title">Live OCR</div>
+                        <div class="live-ocr-value"><span id="liveOcrValue">---.---</span></div>
+                        <div class="live-ocr-unit">meters</div>
+                    </div>
+                    
+                    <!-- Camera Controls -->
+                    <div class="camera-controls">
+                        <div class="form-group">
+                            <label for="espCamUrl">ESP-CAM Stream URL</label>
+                            <input type="text" id="espCamUrl" placeholder="http://192.168.1.100:81/stream">
+                        </div>
+                        <button class="btn btn-primary" id="connectCamBtn">Connect Camera</button>
+                        <button class="btn btn-secondary" id="disconnectCamBtn">Disconnect</button>
+                    </div>
+                    
+                    <!-- Test OCR -->
+                    <div class="test-section">
+                        <h4>Test OCR</h4>
+                        <div class="form-group">
+                            <label for="testImagePath">Image Path (local file)</label>
+                            <input type="text" id="testImagePath" placeholder="d:\path\to\image.png">
+                        </div>
+                        <div class="test-buttons">
+                            <button class="btn btn-info" id="testOcrBtn">Test Sample Image</button>
+                            <button class="btn btn-primary" id="testOcrPathBtn">Test Custom Path</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <div class="main-grid">
+            <!-- Left Panel: Manual Input -->
+            <aside class="input-panel">
+                <h2>Manual Input Panel</h2>
+                
+                <!-- Use OCR Value -->
+                <div class="ocr-to-manual">
+                    <p>Water Level : <strong id="ocrValueSmall">--</strong> m</p>
+                    <button class="btn btn-info" id="useOcrValueBtn">Use OCR Value</button>
+                </div>
+                
+                <hr class="divider">
+                
+                <form id="inputForm">
+                    <div class="form-group">
+                        <label for="waterLevel">Water Level (meters)</label>
+                        <input type="number" id="waterLevel" placeholder="0.000" step="0.001" min="0" max="250" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary" id="addReadingBtn">Add Reading</button>
+                    <button type="button" class="btn btn-secondary" id="clearAllBtn">Clear All Readings</button>
+                </form>
+
+                <hr class="divider">
+
+                <h3>Quick Sensor Simulation</h3>
+                <div class="form-group">
+                    <label for="sensorSimValue">Simulated Water Level (m)</label>
+                    <input type="range" id="sensorSimValue" min="0" max="120" step="0.1" value="45">
+                    <p class="sensor-display">Level: <strong id="sensorDisplay">45.0</strong> m</p>
+                </div>
+                <button type="button" class="btn btn-info" id="addSensorReadingBtn">Add from Sensor</button>
+                <p class="sensor-info" style="font-size: 0.85rem; color: #999; margin-top: 0.5rem;">Use the slider to simulate sensor data for testing the dashboard</p>                <hr class="divider">
+
+                <h3>Sluice Gate Operation – Rotations &amp; Time</h3>
+
+                <div class="form-group">
+                    <label for="gateOpeningInput">Gate Opening (m)</label>
+                    <input type="number" id="gateOpeningInput" step="0.1" min="0" value="0" placeholder="0">
+                </div>
+                <button type="button" class="btn btn-primary" id="setGateBtn">Set Gate</button>
+                <span id="gateStatus"></span>
+
+                <h4>Rotations for Target Discharge</h4>
+                <div class="form-group">
+                    <label for="gateTargetDischarge">Required Discharge Q (m³/s)</label>
+                    <input type="number" id="gateTargetDischarge" step="0.01" min="0" placeholder="0.50">
+                </div>
+                <div class="form-group">
+                    <label for="gateWaterLevel">Water Level H (m)</label>
+                    <input type="number" id="gateWaterLevel" step="0.01" min="0" placeholder="Use current OCR level">
+                </div>
+                <div class="form-group">
+                    <label for="gatePitch">Screw Pitch p (m/rotation)</label>
+                    <input type="number" id="gatePitch" step="0.001" min="0" placeholder="0.02">
+                </div>
+                <button type="button" class="btn btn-primary" id="calcRotationsBtn">Calculate Rotations</button>
+                <p class="gate-result"><strong>N (full rotations):</strong> <span id="gateRotationsValue">--</span></p>
+                <p class="gate-result-sub" id="gateRotationsMessage"></p>
+
+                <h4>Open Time for Target Volume</h4>
+                <div class="form-group">
+                    <label for="gateTargetVolume">Required Volume V (m³)</label>
+                    <input type="number" id="gateTargetVolume" step="1" min="0" placeholder="100.0">
+                </div>
+                <div class="form-group">
+                    <label for="gateRotationsForTime">Rotations N</label>
+                    <input type="number" id="gateRotationsForTime" step="0.1" min="0" placeholder="Use N from above">
+                </div>
+                <div class="form-group">
+                    <label for="gateWaterLevelTime">Water Level H (m)</label>
+                    <input type="number" id="gateWaterLevelTime" step="0.01" min="0" placeholder="Use current OCR level">
+                </div>
+                <div class="form-group">
+                    <label for="gatePitchTime">Screw Pitch p (m/rotation)</label>
+                    <input type="number" id="gatePitchTime" step="0.001" min="0" placeholder="0.02">
+                </div>
+                <button type="button" class="btn btn-primary" id="calcOpenTimeBtn">Calculate Open Time</button>
+                <p class="gate-result"><strong>t (seconds):</strong> <span id="gateOpenTimeValue">--</span></p>
+                <p class="gate-result-sub" id="gateOpenTimeMessage"></p>
+
+                <div class="export-section">
+                    <button class="btn btn-info" id="downloadCsvBtn">Download Readings CSV</button>
+                </div>
+            </aside>
+
+            <!-- Right Panel: Main Content -->
+            <main class="main-content">
+                <!-- KPI Cards -->
+                <section class="kpi-section">
+                    <h2>Key Performance Indicators</h2>
+                    <div class="kpi-grid">
+                        <div class="kpi-card water-level-kpi">
+                            <h3>Water Level (OCR)</h3>
+                            <p class="kpi-value" id="kpiLevelOcr">--</p>
+                            <p class="kpi-status" id="kpiLevelOcrStatus">Waiting for camera</p>
+                            <p class="kpi-unit">meters</p>
+                        </div>
+                        <div class="kpi-card">
+                            <h3>Water Level (Manual)</h3>
+                            <p class="kpi-value" id="kpiLevel">-</p>
+                            <p class="kpi-trend" id="kpiLevelTrend">No data</p>
+                            <p class="kpi-unit">meters</p>
+                        </div>
+                        <div class="kpi-card alert-kpi">
+                            <h3>Active Alerts</h3>
+                            <p class="kpi-value" id="kpiAlerts">0</p>
+                            <p class="kpi-status" id="kpiAlertsStatus">No alerts</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Hydraulics Section -->
+                <section class="hydraulics-section">
+                    <h2>Hydraulic Calculations</h2>
+                    <div class="kpi-grid hydraulics-grid">
+                        <div class="kpi-card hydraulics-kpi">
+                            <h3>Spillway Discharge</h3>
+                            <p class="kpi-value" id="kpiSpillway">--</p>
+                            <p class="kpi-status" id="kpiSpillwayStatus">No data</p>
+                            <p class="kpi-unit">m³/s</p>
+                        </div>
+                        <div class="kpi-card hydraulics-kpi">
+                            <h3>Outlet Discharge</h3>
+                            <p class="kpi-value" id="kpiOutlet">--</p>
+                            <p class="kpi-status" id="kpiOutletStatus">No data</p>
+                            <p class="kpi-unit">m³/s</p>
+                        </div>
+                        <div class="kpi-card hydraulics-kpi">
+                            <h3>Total Outflow</h3>
+                            <p class="kpi-value" id="kpiTotalOutflow">--</p>
+                            <p class="kpi-status" id="kpiOutflowStatus">No data</p>
+                            <p class="kpi-unit">m³/s</p>
+                        </div>
+                        <div class="kpi-card hydraulics-kpi">
+                            <h3>Rotations (N)</h3>
+                            <p class="kpi-value" id="kpiRotations">--</p>
+                            <p class="kpi-status" id="kpiRotationsStatus">Calculate for target Q</p>
+                            <p class="kpi-unit">full rotations</p>
+                        </div>
+                        <div class="kpi-card hydraulics-kpi">
+                            <h3>Open Time (t)</h3>
+                            <p class="kpi-value" id="kpiOpenTime">--</p>
+                            <p class="kpi-status" id="kpiOpenTimeStatus">Calculate for target volume</p>
+                            <p class="kpi-unit">seconds</p>
+                        </div>
+                    </div>
+                </section>
+
+                </section>
+
+                <!-- OCR Reading History -->
+                <section class="ocr-history-section">
+                    <h2>OCR Reading History</h2>
+                    <div class="chart-card">
+                        <canvas id="ocrHistoryChart"></canvas>
+                    </div>
+                </section>
+
+                <!-- History Export Section -->
+                <section class="history-export-section">
+                    <h2>Export History</h2>
+                    <div class="history-stats">
+                        <p>Total Readings: <span id="historyTotalEntries">--</span></p>
+                        <p>Date Range: <span id="historyDateRange">--</span></p>
+                    </div>
+                    <div class="export-controls">
+                        <div class="date-filter-group">
+                            <div class="form-group">
+                                <label for="historyStartDate">Start Date</label>
+                                <input type="date" id="historyStartDate">
+                            </div>
+                            <div class="form-group">
+                                <label for="historyEndDate">End Date</label>
+                                <input type="date" id="historyEndDate">
+                            </div>
+                        </div>
+                        <div class="export-buttons">
+                            <button class="btn btn-primary" id="exportCsvBtn">Export CSV</button>
+                            <button class="btn btn-info" id="exportJsonBtn">Export JSON</button>
+                            <button class="btn btn-secondary" id="previewHistoryBtn">Preview</button>
+                            <button class="btn btn-warning" id="clearHistoryBtn">Clear History</button>
+                        </div>
+                    </div>
+                    <div class="history-preview" id="historyPreview" style="display: none;">
+                        <h4>Preview (last 20 entries)</h4>
+                        <div class="preview-table-wrapper">
+                            <table class="data-table" id="historyPreviewTable">
+                                <thead>
+                                    <tr>
+                                        <th>Timestamp</th>
+                                        <th>Distance</th>
+                                        <th>Water Level</th>
+                                        <th>Percentage</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr><td colspan="5" class="no-data">No data</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+                <!-- Reservoir Dashboard -->
+                <section class="reservoir-dashboard">
+                    <h2>Reservoir Management Dashboard</h2>
+                    <div class="dashboard-grid">
+                        <!-- Card 1: Live Level -->
+                        <div class="dashboard-card">
+                            <div class="card-header">
+                                <h3 class="card-title">LIVE LEVEL</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="card-value" id="liveLevel">-- %</div>
+                                <div class="card-subtitle">% of capacity</div>
+                            </div>
+                        </div>
+
+                        <!-- Card 2: Safe Threshold -->
+                        <div class="dashboard-card">
+                            <div class="card-header">
+                                <h3 class="card-title">SAFE THRESHOLD</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="card-value" id="safeThreshold">90 %</div>
+                                <div class="card-subtitle">%</div>
+                            </div>
+                        </div>
+
+                        <!-- Card 3: Excess Above Threshold -->
+                        <div class="dashboard-card">
+                            <div class="card-header">
+                                <h3 class="card-title">EXCESS ABOVE THRESHOLD</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="card-value" id="excessPercent">0 %</div>
+                                <div class="card-subtitle">%</div>
+                            </div>
+                        </div>
+
+                        <!-- Card 4: Excess Volume to Discharge -->
+                        <div class="dashboard-card">
+                            <div class="card-header">
+                                <h3 class="card-title">EXCESS VOLUME TO DISCHARGE</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="card-value" id="excessVolume">0 m³</div>
+                                <div class="card-subtitle">m³</div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+                <!-- Charts Section -->
+                <section class="charts-section">
+                    <h2>Monitoring Charts</h2>
+                    <div class="charts-grid">
+                        <div class="chart-card">
+                            <h3>Water Level Over Time</h3>
+                            <canvas id="levelChart"></canvas>
+                        </div>
+                        <div class="chart-card">
+                            <h3>Spillway Discharge Over Time</h3>
+                            <canvas id="spillwayChart"></canvas>
+                        </div>
+                        <div class="chart-card">
+                            <h3>Outlet Discharge Over Time</h3>
+                            <canvas id="outletChart"></canvas>
+                        </div>
+                        <div class="chart-card">
+                            <h3>Total Outflow Over Time</h3>
+                            <canvas id="totalOutflowChart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="chart-card rule-curve-card">
+                        <h3>Rule Curve – Water Level in Meters</h3>
+                        <canvas id="ruleCurveChart"></canvas>
+                    </div>
+                </section>
+
+                <!-- Alerts Section -->
+                <section class="alerts-section">
+                    <div class="alerts-header">
+                        <h2>Alerts</h2>
+                        <span class="alert-badge" id="alertBadge">0</span>
+                    </div>
+                    <div id="alertsContainer" class="alerts-container">
+                        <p class="no-alerts">No alerts</p>
+                    </div>
+                    <button class="btn btn-warning" id="acknowledgeAlertsBtn" style="display:none;">Acknowledge Alerts</button>
+                </section>
+
+                <!-- Blockchain Section -->
+                <section class="blockchain-section">
+                    <h2>Blockchain Demo</h2>
+                    <div class="blockchain-controls">
+                        <button class="btn btn-primary" id="mineBlockBtn">Mine Block from Readings</button>
+                        <button class="btn btn-info" id="validateChainBtn">Validate Chain</button>
+                        <span class="chain-status" id="chainStatus">Chain Length: 1 | Status: Valid</span>
+                    </div>
+                    
+                    <div class="blockchain-content">
+                        <div class="blockchain-timeline">
+                            <h3>Block Chain Timeline</h3>
+                            <div id="blockchainTimeline" class="timeline">
+                            </div>
+                        </div>
+                        <div class="blockchain-transactions">
+                            <h3>Readings in Blocks</h3>
+                            <table id="transactionTable" class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Reading ID</th>
+                                        <th>Timestamp</th>
+                                        <th>Level (m)</th>
+                                        <th>Block Index</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr><td colspan="4" class="no-data">No readings yet</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+            </main>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
